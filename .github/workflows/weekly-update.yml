@@ -1,0 +1,46 @@
+name: Radar IA · actualización semanal
+
+on:
+  schedule:
+    # Lunes 06:00 UTC = 08:00 en Madrid (verano) / 07:00 (invierno)
+    - cron: "0 6 * * 1"
+  workflow_dispatch:            # permite lanzarlo a mano desde la pestaña Actions
+
+permissions:
+  contents: write              # para poder commitear la revista actualizada
+
+concurrency:
+  group: radar-ia-update
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repo
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r scripts/requirements.txt
+
+      - name: Generar la edición de la semana
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/update_edition.py
+
+      - name: Publicar cambios
+        run: |
+          git config user.name  "Radar IA (bot)"
+          git config user.email "actions@github.com"
+          if git diff --quiet -- index.html; then
+            echo "Sin cambios en la revista esta semana."
+          else
+            git add index.html
+            git commit -m "Radar IA · edición semanal automática ($(date -u +%Y-%m-%d))"
+            git push
+          fi
