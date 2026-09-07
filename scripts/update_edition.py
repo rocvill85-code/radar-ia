@@ -67,6 +67,19 @@ SCHEMA = {
     },
 }
 
+POSTS_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["posts"],
+    "properties": {"posts": {"type": "array", "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["topic", "text", "source_label", "source_url"],
+        "properties": {
+            "topic": {"type": "string"},
+            "text": {"type": "string"},
+            "source_label": {"type": "string"},
+            "source_url": {"type": "string"},
+        }}}},
+}
+
 
 # --------------------------------------------------------------------------- #
 def _run(client, *, max_tokens, effort, messages, tools=None, output_format=None):
@@ -89,10 +102,7 @@ def _run(client, *, max_tokens, effort, messages, tools=None, output_format=None
     return text, final.stop_reason
 
 
-def fetch_edition(date_label):
-    import anthropic
-    client = anthropic.Anthropic()
-
+def fetch_edition(client, date_label):
     # -- Paso 1: investigar --------------------------------------------------
     research_prompt = f"""Hoy es {date_label}. Busca en la web las noticias MÁS relevantes y recientes (esta semana o últimos días) sobre inteligencia artificial en estos campos, priorizando fuentes en español:
 - Audiovisual y vídeo generativo (Runway, Veo, Kling, Sora, Adobe Firefly, herramientas de post).
@@ -139,6 +149,66 @@ Requisitos:
     if not articles:
         raise SystemExit("El modelo no devolvió noticias.")
     return articles
+
+
+def fetch_posts(client, arts, date_label):
+    """Redacta 2-3 borradores de LinkedIn (voz 916) a partir de las noticias ◎916."""
+    notas = []
+    for a in arts:
+        s = (a.get("sources") or [{}])[0]
+        notas.append(
+            f"- [{a.get('section')}] {a.get('title')} :: {a.get('standfirst')} :: "
+            f"{' '.join(a.get('body', []))} :: relevancia916: {a.get('why916','')} :: "
+            f"fuente: {s.get('label','')} {s.get('url','')}")
+    notas = "\n".join(notas)
+    prompt = f"""Eres quien lleva el LinkedIn de 9dieciséis, una PRODUCTORA de vídeo vertical (9:16) en Barcelona. Estrategia de marca: "autoridad creativa". Sector foco: bebidas y lifestyle.
+
+A partir de estas noticias (ya marcadas como prioritarias para 916), escribe entre 2 y 3 borradores de post de LinkedIn en ESPAÑOL, listos para copiar y pegar. Cada post:
+- 1ª línea: un hook potente (un dato o afirmación que pare el scroll).
+- Desarrollo: la LECTURA y la opinión de 9dieciséis como productora, no un resumen de la noticia.
+- Cierre: una pregunta o llamada a la conversación.
+- 2-4 hashtags al final.
+- 110-190 palabras. Tono profesional pero cercano y con personalidad; máximo 1-2 emojis; nada de jerga vacía.
+- Usa saltos de línea reales entre párrafos (LinkedIn los respeta).
+
+NOTICIAS:
+{notas}
+
+Devuelve JSON: 'posts' = lista de 2-3 objetos con 'topic' (tema corto para etiquetar la tarjeta), 'text' (el post COMPLETO listo para pegar, con saltos de línea reales) y 'source_label'/'source_url' (la fuente principal para verificar el dato)."""
+    text, sr = _run(client, max_tokens=8000, effort="low",
+                    output_format={"type": "json_schema", "schema": POSTS_SCHEMA},
+                    messages=[{"role": "user", "content": prompt}])
+    print(f"[paso 3] posts: {len(text)} chars · stop={sr}")
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+    if not text:
+        print("aviso: sin texto en posts; la edición se publica sin borradores.")
+        return []
+    try:
+        data = json.loads(text)
+        return data.get("posts", []) if isinstance(data, dict) else []
+    except Exception as e:
+        print("aviso: no pude parsear los posts:", e)
+        return []
+
+
+def generate(date_label):
+    import anthropic
+    client = anthropic.Anthropic()
+    articles = fetch_edition(client, date_label)
+    p916 = [a for a in articles if a.get("p916")]
+    posts = fetch_posts(client, p916, date_label) if p916 else []
+    return articles, posts
+
+
+def mock_posts():
+    return [
+        {"topic": "AI Act", "source_label": "Naxia", "source_url": "https://example.com",
+         "text": "Desde el 2 de agosto, etiquetar el contenido hecho con IA ya no es opcional en Europa.\n\nY casi ninguna productora lo tiene resuelto.\n\nEn 9dieciséis lo vemos al revés: es la mejor forma de demostrar criterio. (mock)\n\n¿Tu productora ya lo tiene por escrito?\n\n#AIAct #VideoVertical #ContenidoIA"},
+        {"topic": "Repurposing", "source_label": "Simplifica con IA", "source_url": "https://example.org",
+         "text": "CapCut ya trocea tus vídeos largos en verticales él solo.\n\nEntonces, ¿por qué seguir pagando solo por 'adaptar formatos'? (mock)\n\nLo escaso ya no es el recorte: es la dirección.\n\n¿Tu agencia te vende piezas o te vende sistema?\n\n#VideoMarketing #9dieciséis"},
+    ]
 
 
 def mock_edition():
@@ -258,6 +328,29 @@ def render_feed(articles):
     return "".join(parts)
 
 
+def render_posts(posts):
+    if not posts:
+        return ('\n      <p class="li-empty">Sin noticias prioritarias esta semana, '
+                'así que no hay borradores nuevos.</p>\n      ')
+    out = ["\n"]
+    for p in posts:
+        topic = html.escape(str(p.get("topic", "")))
+        text = html.escape(str(p.get("text", "")))
+        slabel = html.escape(str(p.get("source_label", "Fuente")))
+        surl = html.escape(str(p.get("source_url", "#")), quote=True)
+        out.append(
+            f'      <article class="post">\n'
+            f'        <div class="post-head"><span class="post-tag">◎ 916</span>'
+            f'<span class="post-topic">{topic}</span></div>\n'
+            f'        <pre class="post-text">{text}</pre>\n'
+            f'        <div class="post-actions">'
+            f'<button class="copybtn" type="button">Copiar post</button>'
+            f'<a class="src" href="{surl}" target="_blank" rel="noopener">Fuente: {slabel}</a></div>\n'
+            f'      </article>\n')
+    out.append("      ")
+    return "".join(out)
+
+
 # --------------------------------------------------------------------------- #
 def main():
     with open(TARGET, encoding="utf-8") as f:
@@ -269,7 +362,10 @@ def main():
     today = datetime.datetime.utcnow().date()
     date_label = f"{today.day:02d} {MESES[today.month-1]} {today.year}"
 
-    articles = mock_edition() if os.environ.get("RADAR_MOCK") == "1" else fetch_edition(date_label)
+    if os.environ.get("RADAR_MOCK") == "1":
+        articles, posts = mock_edition(), mock_posts()
+    else:
+        articles, posts = generate(date_label)
 
     edition_html = f"Edición {edition_number:02d} · <b>{date_label}</b>"
     page = re.sub(r"<!--EDITION_START-->.*?<!--EDITION_END-->",
@@ -280,10 +376,15 @@ def main():
                   "<!--FEED_START-->" + render_feed(articles) + "<!--FEED_END-->",
                   page, count=1, flags=re.S)
 
+    page = re.sub(r"<!--LINKEDIN_START-->.*?<!--LINKEDIN_END-->",
+                  "<!--LINKEDIN_START-->" + render_posts(posts) + "<!--LINKEDIN_END-->",
+                  page, count=1, flags=re.S)
+
     with open(TARGET, "w", encoding="utf-8") as f:
         f.write(page)
 
-    print(f"OK · edición {edition_number:02d} · {date_label} · {len(articles)} noticias")
+    print(f"OK · edición {edition_number:02d} · {date_label} · "
+          f"{len(articles)} noticias · {len(posts)} posts")
 
 
 if __name__ == "__main__":

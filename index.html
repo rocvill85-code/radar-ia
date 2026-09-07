@@ -278,6 +278,38 @@
     </div>
   </header>
 
+  <style>
+    [hidden]{display:none!important;}
+    .tabs{max-width:var(--wrap);margin:16px auto 0;display:flex;gap:8px;}
+    .tab{flex:1;font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:11px 12px;border-radius:11px;border:1px solid var(--line-strong);background:var(--card);color:var(--ink-soft);cursor:pointer;transition:.18s;}
+    .tab[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+    .tab:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
+    .li-intro{margin:28px auto 4px;}
+    .li-h{font-family:var(--sans);font-weight:800;letter-spacing:-.02em;font-size:24px;margin:0;text-transform:uppercase;}
+    .li-sub{color:var(--ink-soft);font-size:15px;margin:9px 0 0;}
+    .li-empty{color:var(--ink-faint);font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:34px 0;text-align:center;}
+    .post{background:var(--card);border:1px solid var(--line-strong);border-radius:14px;padding:18px 18px 16px;margin-top:16px;box-shadow:var(--shadow);}
+    .post-head{display:flex;align-items:center;gap:9px;margin-bottom:12px;flex-wrap:wrap;}
+    .post-tag{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:#fff;background:var(--signal);padding:4px 9px;border-radius:999px;}
+    .post-topic{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);}
+    .post-text{font-family:var(--serif);font-size:15px;line-height:1.62;color:var(--ink);white-space:pre-wrap;word-wrap:break-word;margin:0;background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:14px 15px;}
+    .post-actions{display:flex;align-items:center;gap:14px;margin-top:13px;flex-wrap:wrap;}
+    .copybtn{font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;padding:9px 16px;border-radius:999px;border:none;background:var(--signal);color:#fff;cursor:pointer;transition:.15s;}
+    .copybtn:hover{filter:brightness(1.07);}
+    .copybtn.ok{background:var(--teal);}
+    .copybtn:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+    .post .src{font-family:var(--mono);font-size:11px;color:var(--ink-faint);text-decoration:none;border-bottom:1px solid var(--line-strong);padding-bottom:1px;}
+    .post .src:hover{color:var(--signal);border-color:var(--signal);}
+  </style>
+
+  <!-- PESTAÑAS -->
+  <div class="tabs" role="tablist" aria-label="Vistas">
+    <button class="tab" type="button" data-view="revista" aria-selected="true">📰 Revista</button>
+    <button class="tab" type="button" data-view="linkedin" aria-selected="false">💼 Posts LinkedIn</button>
+  </div>
+
+  <section id="view-revista">
+
   <!-- STATS -->
   <section class="stats" aria-label="Datos de la semana">
     <div class="stat s-vert"><div class="n">59%</div><div class="l">del vídeo IA ya es 9:16</div></div>
@@ -410,12 +442,26 @@
 
     <!--FEED_END-->
   </main>
+  </section>
+
+  <!-- VISTA LINKEDIN -->
+  <section id="view-linkedin" hidden>
+    <div class="li-intro wrap">
+      <h2 class="li-h">Borradores para LinkedIn</h2>
+      <p class="li-sub">En la voz de 9dieciséis, a partir de las noticias ◎ Prioridad 916 de esta edición. Pulsa <b>Copiar post</b> y pégalo en LinkedIn. Verifica el dato con la fuente antes de publicar.</p>
+    </div>
+    <div class="wrap" id="posts">
+      <!--LINKEDIN_START-->
+      <p class="li-empty">Los borradores se generan cada semana junto con la edición.</p>
+      <!--LINKEDIN_END-->
+    </div>
+  </section>
 
   <!-- FOOTER -->
   <footer class="foot">
     <div class="row">
       <span class="brand">Radar IA · 9dieciséis</span>
-      <p>Edición privada · uso interno<br>Próxima actualización: lun 18 AGO 2026</p>
+      <p>Edición privada · uso interno<br>Se actualiza sola cada lunes</p>
     </div>
     <p class="note">Briefing curado a partir de fuentes internacionales en español. Los iconos <b>◎ Prioridad 916</b> marcan lo que conviene leer primero por su impacto directo en la productora. ¿Falta algo o quieres una sección nueva? Se ajusta en la siguiente edición.</p>
   </footer>
@@ -450,6 +496,22 @@
       });
     }
     empty.classList.toggle('show', shown===0);
+  });
+})();
+</script>
+
+<script>
+(function(){
+  var tabs=document.querySelectorAll('.tab');
+  var views={revista:document.getElementById('view-revista'),linkedin:document.getElementById('view-linkedin')};
+  function show(v){for(var k in views){if(views[k])views[k].hidden=(k!==v);}tabs.forEach(function(t){t.setAttribute('aria-selected',t.getAttribute('data-view')===v?'true':'false');});try{window.scrollTo(0,0);}catch(e){}}
+  tabs.forEach(function(t){t.addEventListener('click',function(){show(t.getAttribute('data-view'));});});
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('.copybtn');if(!btn)return;
+    var post=btn.closest('.post');var pre=post?post.querySelector('.post-text'):null;var txt=pre?pre.textContent:'';
+    function done(){var o=btn.getAttribute('data-label')||btn.textContent;btn.setAttribute('data-label',o);btn.textContent='¡Copiado!';btn.classList.add('ok');setTimeout(function(){btn.textContent=o;btn.classList.remove('ok');},1800);}
+    function fb(t){try{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);}catch(e){}}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(function(){fb(txt);done();});}else{fb(txt);done();}
   });
 })();
 </script>
