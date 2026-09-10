@@ -20,7 +20,7 @@ import datetime
 
 TARGET = os.environ.get("RADAR_TARGET", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "index.html"))
-MODEL = os.environ.get("RADAR_MODEL", "claude-opus-5")
+MODEL = os.environ.get("RADAR_MODEL", "claude-sonnet-5")
 
 SECTIONS = [
     ("av",   "Audiovisual",   "Vídeo generativo · herramientas de producción", "var(--c-av)"),
